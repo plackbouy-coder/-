@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { Eye, Shield, Target, Search, MessageSquare, Gavel, Home, Volume2, Mic, MicOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 type Role = 'mafia' | 'doctor' | 'detective' | 'citizen';
 type Phase = 'selection' | 'revealing' | 'night_mafia' | 'night_doctor' | 'night_detective' | 'day' | 'voting' | 'result' | 'end';
@@ -71,9 +72,50 @@ export const GameRoom = () => {
     const [chatInput, setChatInput] = useState('');
     const [showChatMobile, setShowChatMobile] = useState(false);
     const [gameStarted, setGameStarted] = useState(false);
+    const [isConfirmExitOpen, setIsConfirmExitOpen] = useState(false);
+    const [isVotingOpen, setIsVotingOpen] = useState(false);
+    const [votes, setVotes] = useState<Record<number, number>>({});
+    const [hasVoted, setHasVoted] = useState(false);
+    const [voteTimer, setVoteTimer] = useState(30);
+    const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (phase === 'voting') {
+            setIsVotingOpen(true);
+            setVoteTimer(30);
+            setHasVoted(false);
+            setVotes({});
+        } else {
+            setIsVotingOpen(false);
+        }
+    }, [phase]);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isVotingOpen && voteTimer > 0) {
+            interval = setInterval(() => setVoteTimer(prev => prev - 1), 1000);
+        } else if (isVotingOpen && voteTimer === 0) {
+            setIsVotingOpen(false);
+        }
+        return () => clearInterval(interval);
+    }, [isVotingOpen, voteTimer]);
 
     // Microphone simulation and real audio analysis
     const [isMicActive, setIsMicActive] = useState(false);
+    
+    const handleToggleMic = () => {
+        const nextMicState = !isMicActive;
+        setIsMicActive(nextMicState);
+        const userId = players.find(p => p.isUser)?.id;
+        if (userId) {
+            setSpeakingPlayers(prev => {
+                const next = new Set(prev);
+                if (nextMicState) next.add(userId);
+                else next.delete(userId);
+                return next;
+            });
+        }
+    };
     const [voiceLevel, setVoiceLevel] = useState(0);
     const [useCustomVoice, setUseCustomVoice] = useState(true);
     const audioContextRef = React.useRef<AudioContext | null>(null);
@@ -175,9 +217,7 @@ export const GameRoom = () => {
     }, [phase, gameStarted, players]);
 
     const handleExit = () => {
-        if (window.confirm('هل أنت متأكد أنك تريد الخروج من اللعبة؟')) {
-            setCurrentView('lobby');
-        }
+        setIsConfirmExitOpen(true);
     };
 
     const speak = (text: string, phaseId?: string) => {
@@ -571,16 +611,18 @@ export const GameRoom = () => {
                 </div>
                 <div className="grid grid-cols-5 gap-2 sm:gap-3 max-w-lg w-full mb-4">
                     {[...Array(10)].map((_, i) => (
-                        <button 
+                        <motion.button 
                             key={i} 
                             onClick={() => handleSelectCard(i)} 
                             disabled={selectedCardIndex !== null} 
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             className={`aspect-square bg-slate-900 border-2 border-slate-800 rounded-xl flex items-center justify-center font-bold text-lg sm:text-xl text-slate-400 hover:bg-slate-850 hover:border-indigo-500/50 shadow transition-all ${
                                 selectedCardIndex === i ? 'bg-indigo-600 text-white border-indigo-600 scale-105 shadow-indigo-600/20' : ''
                             }`}
                         >
                             ?
-                        </button>
+                        </motion.button>
                     ))}
                 </div>
 
@@ -647,20 +689,6 @@ export const GameRoom = () => {
 
     const isNightPhase = phase.startsWith('night_');
     const isUserDead = !players.find(p => p.isUser)?.isAlive;
-    const showBlackScreen = isNightPhase && (
-        (phase === 'night_mafia' && userRole !== 'mafia') ||
-        (phase === 'night_doctor' && userRole !== 'doctor') ||
-        (phase === 'night_detective' && userRole !== 'detective') ||
-        isUserDead
-    );
-
-    const getBlackScreenText = () => {
-        if (isUserDead) return "أنت ميت... انتظر الصباح.";
-        if (phase === 'night_mafia') return "المافيا تختار ضحيتها...";
-        if (phase === 'night_doctor') return "الطبيب يقوم بعمله...";
-        if (phase === 'night_detective') return "المحقق يبحث عن الأدلة...";
-        return "انتظر...";
-    };
 
     return (
         <div className="w-full h-full bg-slate-950 text-slate-100 flex flex-col p-2 sm:p-4 pb-16 lg:pb-16 lg:flex-row gap-3 overflow-hidden" dir={settings.language === 'ar' ? 'rtl' : 'ltr'}>
@@ -697,15 +725,15 @@ export const GameRoom = () => {
                     </div>
                 </div>
 
-                {showBlackScreen ? (
-                    <div className="flex-1 flex flex-col bg-slate-900/60 items-center justify-center rounded-xl p-4 shadow-lg border border-slate-800/80 min-h-[250px]">
-                        <Eye className="w-12 h-12 text-slate-700 mb-4 animate-pulse" />
-                        <h2 className="text-base sm:text-lg font-bold text-slate-300 text-center">{getBlackScreenText()}</h2>
-                        <div className="text-sm font-mono font-bold text-slate-500 mt-2">{formatTime(timer)}</div>
-                    </div>
-                ) : (
-                    /* Player Grid (Responsive layout and ultra-compact responsive cards) */
-                    <div className="grid grid-cols-3 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 flex-1 overflow-y-auto pb-4 custom-scrollbar">
+                {/* Player Grid (Responsive layout and ultra-compact responsive cards) */}
+                <motion.div 
+                    key={phase}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="grid grid-cols-3 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 flex-1 overflow-y-auto pb-4 custom-scrollbar"
+                >
                         {players.map(player => {
                             const isVisibleToMafia = userRole === 'mafia' && player.role === 'mafia';
                             const showRole = player.isUser || !player.isAlive || phase === 'end' || isVisibleToMafia;
@@ -719,11 +747,26 @@ export const GameRoom = () => {
                                         </span>
                                     </div>
 
-                                    <div className="text-center mb-1.5 flex flex-col items-center">
+                                    <div className="relative text-center mb-1.5 flex flex-col items-center">
+                                        {speakingPlayers.has(player.id) && (
+                                            <motion.div
+                                                initial={{ scale: 0.8, opacity: 0 }}
+                                                animate={{ scale: [1, 1.2, 1], opacity: 1 }}
+                                                transition={{ repeat: Infinity, duration: 1.5 }}
+                                                className="absolute -top-1 right-3 bg-emerald-500 rounded-full p-0.5 shadow-lg border border-white"
+                                            >
+                                                <Mic className="w-2.5 h-2.5 text-white" />
+                                            </motion.div>
+                                        )}
+                                        {isVotingOpen && votes[player.id] > 0 && (
+                                            <div className="absolute -bottom-1 -left-1 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold border border-white shadow-sm z-10">
+                                                {votes[player.id]}
+                                            </div>
+                                        )}
                                         {player.avatar ? (
-                                            <img src={player.avatar} alt={player.name} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full mb-1 object-cover border-2 ${!player.isAlive ? 'border-red-950 grayscale' : 'border-slate-800'}`} />
+                                            <img src={player.avatar} alt={player.name} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full mb-1 object-cover border-2 ${!player.isAlive ? 'border-red-950 grayscale' : speakingPlayers.has(player.id) ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-800'}`} />
                                         ) : (
-                                            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full mb-1 flex items-center justify-center border-2 ${!player.isAlive ? 'bg-slate-950 border-slate-950 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                                            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full mb-1 flex items-center justify-center border-2 ${!player.isAlive ? 'bg-slate-950 border-slate-950 text-slate-600' : speakingPlayers.has(player.id) ? 'bg-emerald-500/20 border-emerald-500' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                                                 <span className="font-bold text-xs sm:text-sm">{player.name.substring(0, 1)}</span>
                                             </div>
                                         )}
@@ -768,8 +811,7 @@ export const GameRoom = () => {
                                 </div>
                             );
                         })}
-                    </div>
-                )}
+                    </motion.div>
                 
                 {phase === 'end' && (
                      <div className="mt-4 flex justify-center">
@@ -812,12 +854,60 @@ export const GameRoom = () => {
             </div>
 
             {/* Bottom Bar with exit option, role display and action controls */}
+            
+            {isVotingOpen && (
+                <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl w-full max-w-sm"
+                    >
+                        <h3 className="text-xl font-black text-white mb-2 text-center">التصويت للإقصاء</h3>
+                        <p className="text-slate-400 text-sm mb-6 text-center">الوقت المتبقي: <span className="font-mono text-indigo-400 font-bold">{voteTimer}</span> ثانية</p>
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-6 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                            {players.filter(p => p.isAlive).map(player => (
+                                <button
+                                    key={player.id}
+                                    disabled={hasVoted}
+                                    onClick={() => {
+                                        setVotes(prev => ({ ...prev, [player.id]: (prev[player.id] || 0) + 1 }));
+                                        setHasVoted(true);
+                                    }}
+                                    className={`p-2 rounded-lg text-xs font-bold border transition-all ${hasVoted ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-indigo-600 hover:text-white'}`}
+                                >
+                                    {player.name}
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {isConfirmExitOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                   <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl shadow-xl w-full max-w-sm">
+                       <h3 className="text-lg font-bold text-white mb-4">تأكيد الخروج</h3>
+                       <p className="text-slate-300 mb-6">هل أنت متأكد من مغادرة اللعبة؟ سيتم إنهاء جلستك.</p>
+                       <div className="flex gap-4">
+                           <button onClick={() => setIsConfirmExitOpen(false)} className="flex-1 bg-slate-700 text-white py-2 rounded-lg font-bold">إلغاء</button>
+                           <button onClick={() => { setIsConfirmExitOpen(false); setCurrentView('home'); }} className="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold">مغادرة</button>
+                       </div>
+                   </div>
+                </div>
+            )}
             <div className="fixed bottom-0 left-0 right-0 h-14 bg-slate-950/95 backdrop-blur-md border-t border-slate-850 flex items-center justify-between px-4 z-20 shadow-2xl">
                 <button onClick={handleExit} className="flex items-center gap-1.5 bg-red-950/40 text-red-400 hover:bg-red-900/60 border border-red-500/20 px-3 py-1.5 rounded-lg text-xs font-black transition-all">
                     <Home className="w-4 h-4" /> الخروج من اللعبة
                 </button>
                 
                 <div className="flex items-center gap-2">
+                    <button 
+                        onClick={handleToggleMic} 
+                        className={`p-2 rounded-lg transition-colors ${isMicActive ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'}`}
+                    >
+                        {isMicActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                    </button>
                     <div className="flex items-center gap-1 bg-slate-900 border border-slate-850 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300">
                         <span className="text-slate-500">دورك:</span>
                         <span className={`font-black ${userRole === 'mafia' ? 'text-red-400' : userRole === 'doctor' ? 'text-green-400' : userRole === 'detective' ? 'text-blue-400' : 'text-slate-300'}`}>

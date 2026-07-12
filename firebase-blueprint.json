@@ -25,6 +25,16 @@
         "region": { "type": "string" }
       },
       "required": ["id", "status", "players"]
+    },
+    "Lobby": {
+      "title": "Lobby",
+      "description": "Waiting lobby",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "category": { "type": "string" },
+        "players": { "type": "array" }
+      }
     }
   },
   "firestore": {
@@ -35,6 +45,10 @@
     "/rooms/{roomId}": {
       "schema": "Room",
       "description": "Active game rooms"
+    },
+    "/lobbies/{lobbyId}": {
+      "schema": "Lobby",
+      "description": "Active game lobbies"
     }
   }
 }

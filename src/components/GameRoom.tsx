@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { Eye, Shield, Target, Search, MessageSquare, Gavel, Home, Volume2, Mic, MicOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { RoleCard } from './RoleCard';
 
 type Role = 'mafia' | 'doctor' | 'detective' | 'citizen';
 type Phase = 'selection' | 'revealing' | 'night_mafia' | 'night_doctor' | 'night_detective' | 'day' | 'voting' | 'result' | 'end';
@@ -78,6 +79,7 @@ export const GameRoom = () => {
     const [hasVoted, setHasVoted] = useState(false);
     const [voteTimer, setVoteTimer] = useState(30);
     const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
+    const [showRoleCard, setShowRoleCard] = useState(false);
 
     useEffect(() => {
         if (phase === 'voting') {
@@ -221,14 +223,22 @@ export const GameRoom = () => {
     };
 
     const speak = (text: string, phaseId?: string) => {
-        if (useCustomVoice && phaseId && settings.customAudio?.[phaseId]) {
-            const audio = new Audio(settings.customAudio[phaseId]);
-            audio.volume = (settings.volume ?? 80) / 100;
-            audio.play().catch(e => {
-                console.error("Error playing custom audio:", e);
+        const customAudioUrl = phaseId ? settings.customAudio?.[phaseId] : null;
+
+        if (useCustomVoice && customAudioUrl && typeof customAudioUrl === 'string' && customAudioUrl.trim() !== '') {
+            try {
+                const audio = new Audio(customAudioUrl);
+                audio.volume = (settings.volume ?? 80) / 100;
+                audio.play().catch(e => {
+                    console.warn("Error playing custom audio, falling back to TTS:", e);
+                    playTTS(text);
+                });
+                return;
+            } catch (e) {
+                console.warn("Invalid audio URL, falling back to TTS:", e);
                 playTTS(text);
-            });
-            return;
+                return;
+            }
         }
         playTTS(text);
     };
@@ -501,6 +511,7 @@ export const GameRoom = () => {
         
         setPhase('revealing');
         setTimer(10);
+        setShowRoleCard(true);
     };
 
     const handleAction = (targetId: number) => {
@@ -882,6 +893,10 @@ export const GameRoom = () => {
                         </div>
                     </motion.div>
                 </div>
+            )}
+
+            {showRoleCard && userRole && (
+                <RoleCard role={userRole} onClose={() => setShowRoleCard(false)} />
             )}
 
             {isConfirmExitOpen && (

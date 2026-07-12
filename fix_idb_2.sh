@@ -1,0 +1,1 @@
+sed -i 's/    }).catch(err => console.error('"'"'Failed to load custom audio from IDB:'"'"', err));/    }).catch(err => console.error('"'"'Failed to load custom audio from IDB:'"'"', err)).finally(() => setSettingsLoaded(true));/g' src/context/GameContext.tsx

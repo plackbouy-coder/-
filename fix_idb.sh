@@ -1,0 +1,1 @@
+sed -i 's/const \[settings, setSettings\] = useState<GameSettings>(() => {/const [settingsLoaded, setSettingsLoaded] = useState(false);\n  const [settings, setSettings] = useState<GameSettings>(() => {/g' src/context/GameContext.tsx

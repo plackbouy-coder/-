@@ -1,0 +1,7 @@
+{
+  "name": "ليالي الشك",
+  "description": "لعبة مافيا جماعية مع نظام تصويت ونظام مهام وتطوير أدوار",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

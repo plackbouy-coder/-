@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "User profile and game stats",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "wins": { "type": "number" },
+        "losses": { "type": "number" },
+        "elo": { "type": "number" },
+        "region": { "type": "string" }
+      },
+      "required": ["uid", "username"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Game room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["lobby", "playing", "finished"] },
+        "players": { "type": "array" },
+        "region": { "type": "string" }
+      },
+      "required": ["id", "status", "players"]
+    }
+  },
+  "firestore": {
+    "/players/{uid}": {
+      "schema": "Player",
+      "description": "User profiles"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Active game rooms"
+    }
+  }
+}
